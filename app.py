@@ -17,8 +17,8 @@ formatted_df = load_vector_store()
 
 # --- Embedding function using text-embedding-004 ---
 def embed_fn(text):
-    model = genai.GenerativeModel("models/text-embedding-004")
-    response = model.embed_content(
+    response = genai.embed_content(
+        model="models/text-embedding-004",
         content=text,
         task_type="retrieval_document"
     )
