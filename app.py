@@ -4,18 +4,20 @@ import numpy as np
 import json
 import google.generativeai as genai
 
+# ✅ Must be the first Streamlit command
 st.set_page_config(page_title="Thera – Mental Health Therapist", layout="centered")
-# --- Configure Gemini with secure key from Streamlit secrets ---
+
+# --- Configure Gemini using secret API key ---
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# --- Load vector store (pre-embedded dataframe) ---
+# --- Load vector store ---
 @st.cache_resource
 def load_vector_store():
     return pd.read_pickle("vector_store.pkl")
 
 formatted_df = load_vector_store()
 
-# --- Embedding function using text-embedding-004 ---
+# --- Embedding function using correct Gemini API ---
 def embed_fn(text):
     response = genai.embed_content(
         model="models/text-embedding-004",
@@ -24,7 +26,7 @@ def embed_fn(text):
     )
     return np.array(response["embedding"])
 
-# --- Vector search: retrieve top-k similar past examples ---
+# --- Retrieve top-k most relevant past examples ---
 def retrieve_similar_responses(query, df, top_k=3):
     query_vec = embed_fn(query)
     similarities = []
@@ -39,7 +41,7 @@ def retrieve_similar_responses(query, df, top_k=3):
 
     return sorted(similarities, key=lambda x: x["score"], reverse=True)[:top_k]
 
-# --- Main RAG-based response generator using Gemini ---
+# --- RAG + Gemini response generator ---
 def mental_health_rag_response(query):
     top_matches = retrieve_similar_responses(query, formatted_df)
 
@@ -72,9 +74,7 @@ Respond strictly in the following JSON format:
 
     model = genai.GenerativeModel("models/gemini-2.0-flash")
     response = model.generate_content(prompt)
-
     return response.candidates[0].content.parts[0].text
-
 
 # --- Streamlit App UI ---
 st.title("🧠 Thera – Your Mental Health Therapist")
@@ -88,7 +88,11 @@ if st.button("Ask Thera"):
             raw_response = mental_health_rag_response(query)
 
         try:
-            parsed = json.loads(raw_response)
+            # ✅ Extract valid JSON block even if extra text is present
+            start = raw_response.find("{")
+            end = raw_response.rfind("}") + 1
+            json_block = raw_response[start:end]
+            parsed = json.loads(json_block)
 
             st.subheader("🧠 Therapist's Response")
             st.markdown(parsed["response"])
@@ -100,6 +104,5 @@ if st.button("Ask Thera"):
         except Exception as e:
             st.error("⚠️ Couldn't parse Gemini's response.")
             st.code(raw_response)
-
     else:
-        st.info("Please type your question above.")
+        st.info("Please type something first.")
