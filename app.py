@@ -4,10 +4,10 @@ import numpy as np
 import json
 import google.generativeai as genai
 
-# ✅ Must be the first Streamlit command
+# ✅ Must be first Streamlit command
 st.set_page_config(page_title="Thera – Mental Health Therapist", layout="centered")
 
-# --- Configure Gemini using secret API key ---
+# --- Configure Gemini API ---
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # --- Load vector store ---
@@ -17,7 +17,7 @@ def load_vector_store():
 
 formatted_df = load_vector_store()
 
-# --- Embedding function using correct Gemini API ---
+# --- Embedding function ---
 def embed_fn(text):
     response = genai.embed_content(
         model="models/text-embedding-004",
@@ -26,7 +26,7 @@ def embed_fn(text):
     )
     return np.array(response["embedding"])
 
-# --- Retrieve top-k most relevant past examples ---
+# --- Vector search using cosine similarity ---
 def retrieve_similar_responses(query, df, top_k=3):
     query_vec = embed_fn(query)
     similarities = []
@@ -41,7 +41,7 @@ def retrieve_similar_responses(query, df, top_k=3):
 
     return sorted(similarities, key=lambda x: x["score"], reverse=True)[:top_k]
 
-# --- RAG + Gemini response generator ---
+# --- Gemini-powered structured response ---
 def mental_health_rag_response(query):
     top_matches = retrieve_similar_responses(query, formatted_df)
 
@@ -65,7 +65,7 @@ Use the following past examples for context:
 
 User: {query}
 
-Respond strictly in the following JSON format:
+Respond strictly in this JSON format:
 {{
   "response": "Your therapist's reply using natural language and warmth",
   "suggestions": ["A list of simple mental wellness tips like sleep well, talk to someone, journal, etc."]
@@ -76,33 +76,51 @@ Respond strictly in the following JSON format:
     response = model.generate_content(prompt)
     return response.candidates[0].content.parts[0].text
 
-# --- Streamlit App UI ---
+# --- Streamlit Chat UI ---
 st.title("🧠 Thera – Your Mental Health Therapist")
-st.markdown("Ask Thera how you're feeling and get supportive suggestions.")
+st.markdown("Talk to Thera, your GenAI-powered therapist who responds with kindness and empathy.")
 
-query = st.text_area("💬 What's on your mind?", height=150)
+# Initialize session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if st.button("Ask Thera"):
-    if query.strip():
-        with st.spinner("Thera is thinking..."):
-            raw_response = mental_health_rag_response(query)
+# Show chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Chat input
+user_input = st.chat_input("What's on your mind?")
+
+if user_input:
+    # Show user input
+    st.chat_message("user").markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Gemini responds
+    with st.spinner("Thera is thinking..."):
+        raw_response = mental_health_rag_response(user_input)
 
         try:
-            # ✅ Extract valid JSON block even if extra text is present
             start = raw_response.find("{")
             end = raw_response.rfind("}") + 1
             json_block = raw_response[start:end]
             parsed = json.loads(json_block)
 
-            st.subheader("🧠 Therapist's Response")
-            st.markdown(parsed["response"])
+            thera_reply = parsed["response"]
+            suggestions = parsed.get("suggestions", [])
 
-            st.subheader("🌱 Suggestions")
-            for s in parsed["suggestions"]:
-                st.markdown(f"- {s}")
+            # Show assistant reply
+            with st.chat_message("assistant"):
+                st.markdown(thera_reply)
+                if suggestions:
+                    st.markdown("🌱 **Suggestions:**")
+                    for item in suggestions:
+                        st.markdown(f"- {item}")
+
+            st.session_state.messages.append({"role": "assistant", "content": thera_reply})
 
         except Exception as e:
-            st.error("⚠️ Couldn't parse Gemini's response.")
-            st.code(raw_response)
-    else:
-        st.info("Please type something first.")
+            fallback_reply = "Hmm... I’m having trouble understanding that. Can we try again?"
+            st.chat_message("assistant").markdown(fallback_reply)
+            st.session_state.messages.append({"role": "assistant", "content": fallback_reply})
