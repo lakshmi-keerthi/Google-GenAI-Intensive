@@ -4,6 +4,7 @@ import numpy as np
 import json
 import google.generativeai as genai
 
+st.set_page_config(page_title="Thera – Mental Health Therapist", layout="centered")
 # --- Configure Gemini with secure key from Streamlit secrets ---
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
@@ -76,7 +77,6 @@ Respond strictly in the following JSON format:
 
 
 # --- Streamlit App UI ---
-st.set_page_config(page_title="Thera – Mental Health Therapist", layout="centered")
 st.title("🧠 Thera – Your Mental Health Therapist")
 st.markdown("Ask Thera how you're feeling and get supportive suggestions.")
 
